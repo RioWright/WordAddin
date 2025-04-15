@@ -1,0 +1,116 @@
+name: Input Values
+description: Input values into the table
+host: WORD
+api_set: {}
+script:
+  content: "document.addEventListener(\"DOMContentLoaded\", function() {\r\n  let currentRow = 2; // Start from row 5\r\n  let targetColumn = 1; // Default column for Sunday (index 1)\r\n  const maxRows = 22; // Fill rows 1 to 22\r\n  const skipRows = [6, 20]; // Rows to skip (1-indexed)\r\n\r\n  Office.onReady().then(() => {\r\n    const inputField = document.getElementById(\"cellInput\");\r\n    const nextButton = document.getElementById(\"nextButton\");\r\n    const backButton = document.getElementById(\"backButton\"); // Get back button\r\n    const statusPara = document.getElementById(\"status\");\r\n    const clearTableButton = document.getElementById(\"clearTableButton\");\r\n    const confirmationButtons = document.getElementById(\"confirmationButtons\");\r\n    const yesButton = document.getElementById(\"yesButton\");\r\n    const noButton = document.getElementById(\"noButton\");\r\n\r\n    if (!inputField || !nextButton || !statusPara || !backButton) {\r\n      console.error(\"❌ One or more HTML elements are missing.\");\r\n      return;\r\n    }\r\n\r\n    // Display the first row to fill when the script starts\r\n    displayNextRow();\r\n\r\n    nextButton.addEventListener(\"click\", async () => {\r\n      const inputValue = inputField.value.trim();\r\n\r\n      // If no input value is provided, skip to the next row\r\n      if (!inputValue && currentRow <= maxRows) {\r\n        statusPara.textContent = \"⚠️ Please enter a value first.\";\r\n        return;\r\n      }\r\n\r\n      try {\r\n        await Word.run(async (context) => {\r\n          const tables = context.document.body.tables;\r\n          tables.load(\"items\");\r\n          await context.sync();\r\n\r\n          if (tables.items.length === 0) {\r\n            statusPara.textContent = \"❌ No tables found.\";\r\n            return;\r\n          }\r\n\r\n          const table = tables.items[0];\r\n          table.load(\"rowCount, columnCount\");\r\n          await context.sync();\r\n\r\n          if (currentRow > maxRows) {\r\n            statusPara.textContent = \"✅ All rows have been filled.\";\r\n            return;\r\n          }\r\n\r\n          // Get the value from the first column (index 0) for the current row\r\n          const firstColumnCell = table.getCell(currentRow, 0);\r\n          firstColumnCell.load(\"value\"); // Load the 'value' property\r\n          await context.sync();\r\n\r\n          const firstColumnValue = firstColumnCell.value;\r\n\r\n          // Set the value in the target column (based on the selected day)\r\n          const cell = table.getCell(currentRow, targetColumn);\r\n          cell.value = inputValue;\r\n          await context.sync();\r\n\r\n          inputField.value = \"\"; // Clear input field\r\n\r\n          // After filling, jump to the next row with the appropriate skip logic\r\n          if (currentRow === 5) {\r\n            currentRow = 7; // Skip from row 5 to row 7\r\n          } else if (currentRow === 19) {\r\n            currentRow = 21; // Skip from row 19 to row 21\r\n          } else {\r\n            currentRow++; // Move to the next row normally\r\n          }\r\n\r\n          // Update the status to show the next row it's going to fill\r\n          displayNextRow();\r\n        });\r\n      } catch (error) {\r\n        console.error(\"💥 Error:\", error);\r\n        statusPara.textContent = \"💥 Something went wrong.\";\r\n      }\r\n    });\r\n\r\n    // Add event listener for the Back button\r\n    backButton.addEventListener(\"click\", async () => {\r\n      // Check if we can move back (ensure we don't go below row 1)\r\n      if (currentRow > 2) {\r\n        // If at row 7 or row 21, skip the same way we do with the next button\r\n        if (currentRow === 7) {\r\n          currentRow = 5; // Move back to row 5\r\n        } else if (currentRow === 21) {\r\n          currentRow = 19; // Move back to row 19\r\n        } else {\r\n          currentRow--; // Move to the previous row normally\r\n        }\r\n\r\n        // Display the row and the corresponding day\r\n        displayNextRow();\r\n      }\r\n    });\r\n\r\n    // Function to display the current row it's about to fill\r\n    function displayNextRow() {\r\n      if (currentRow > maxRows) {\r\n        statusPara.textContent = \"✅ All rows have been filled.\";\r\n        return;\r\n      }\r\n\r\n      Word.run(async (context) => {\r\n        const tables = context.document.body.tables;\r\n        tables.load(\"items\");\r\n        await context.sync();\r\n\r\n        const table = tables.items[0];\r\n        const firstColumnCell = table.getCell(currentRow, 0);\r\n        firstColumnCell.load(\"value\"); // Load the 'value' property\r\n        await context.sync();\r\n\r\n        const firstColumnValue = firstColumnCell.value;\r\n\r\n        // Display which row it's about to fill along with the day name\r\n        statusPara.textContent = `✅ Ready to fill row for \"${firstColumnValue}\" in ${getDayName(targetColumn)}`;\r\n      });\r\n    }\r\n\r\n    // Adding the date buttons and their logic for column selection\r\n    document.getElementById(\"mondayBtn\").addEventListener(\"click\", () => setColumn(2));\r\n    document.getElementById(\"tuesdayBtn\").addEventListener(\"click\", () => setColumn(3));\r\n    document.getElementById(\"wednesdayBtn\").addEventListener(\"click\", () => setColumn(4));\r\n    document.getElementById(\"thursdayBtn\").addEventListener(\"click\", () => setColumn(5));\r\n    document.getElementById(\"fridayBtn\").addEventListener(\"click\", () => setColumn(6));\r\n    document.getElementById(\"saturdayBtn\").addEventListener(\"click\", () => setColumn(7));\r\n    document.getElementById(\"sundayBtn\").addEventListener(\"click\", () => setColumn(1));\r\n\r\n    // Set column based on button clicked\r\n    function setColumn(columnIndex) {\r\n      targetColumn = columnIndex; // Update the target column based on selected day\r\n      statusPara.textContent = `✅ Ready to fill the column for ${getDayName(columnIndex)}`;\r\n      displayNextRow();\r\n    }\r\n\r\n    // Helper function to get the day name from the column index\r\n    function getDayName(columnIndex) {\r\n      const days = [\"Sunday\", \"Monday\", \"Tuesday\", \"Wednesday\", \"Thursday\", \"Friday\", \"Saturday\"];\r\n      return days[columnIndex - 1];\r\n    }\r\n\r\n    // Ensure the button exists\r\n    if (!clearTableButton) {\r\n      console.error(\"❌ Clear Table button is missing in the HTML.\");\r\n      return;\r\n    }\r\n    // Ensure the elements exist\r\n    if (\r\n      !inputField ||\r\n      !nextButton ||\r\n      !statusPara ||\r\n      !clearTableButton ||\r\n      !confirmationButtons ||\r\n      !yesButton ||\r\n      !noButton\r\n    ) {\r\n      console.error(\"❌ One or more HTML elements are missing.\");\r\n      return;\r\n    }\r\n\r\n    // Clear Table Button functionality\r\n    clearTableButton.addEventListener(\"click\", () => {\r\n      // Hide other buttons and show confirmation\r\n      confirmationButtons.style.display = \"block\"; // Show Yes/No buttons\r\n      statusPara.textContent = \"❗ Are you sure you want to clear the table?\"; // Update status text\r\n      clearTableButton.style.display = \"none\"; // Hide the \"Clear Table\" button\r\n    });\r\n\r\n    // Yes Button (clear the table)\r\n    yesButton.addEventListener(\"click\", async () => {\r\n      await Word.run(async (context) => {\r\n        try {\r\n          const tables = context.document.body.tables;\r\n          tables.load(\"items\");\r\n\r\n          await context.sync();\r\n\r\n          if (tables.items.length === 0) {\r\n            console.log(\"❌ No tables found in document.\");\r\n            return;\r\n          }\r\n\r\n          const table = tables.items[0];\r\n          table.rows.load(\"items\");\r\n\r\n          await context.sync();\r\n\r\n          const rows = table.rows.items;\r\n\r\n          // 1. Load and clear row 0, column 0\r\n          const firstRow = rows[0];\r\n          firstRow.cells.load(\"items\"); // Load cells in the first row\r\n\r\n          await context.sync();\r\n\r\n          const firstCell = firstRow.cells.items[0];\r\n          firstCell.body.clear();\r\n\r\n          // 2. Clear rows 1–22 and columns 1–7\r\n          const maxRowIndex = Math.min(22, rows.length - 1); // Avoid going out of bounds\r\n\r\n          for (let r = 1; r <= maxRowIndex; r++) {\r\n            const row = rows[r];\r\n            row.cells.load(\"items\");\r\n            await context.sync();\r\n\r\n            const cells = row.cells.items;\r\n            for (let c = 1; c <= 7; c++) {\r\n              const cell = cells[c];\r\n              cell.body.clear();\r\n            }\r\n          }\r\n\r\n          await context.sync();\r\n        } catch (err) {\r\n          console.error(\"💥 Error during Word.run:\\n\", err);\r\n        }\r\n      });\r\n      confirmationButtons.style.display = \"none\"; // Hide confirmation buttons\r\n      clearTableButton.style.display = \"block\"; // Show the \"Clear Table\" button again\r\n\r\n      // Display where you are inputting the value again\r\n      displayNextRow(); // Show the current row for input, along with the day and other info\r\n    });\r\n\r\n    // No Button (cancel clearing)\r\n    noButton.addEventListener(\"click\", () => {\r\n      confirmationButtons.style.display = \"none\"; // Hide confirmation buttons\r\n      clearTableButton.style.display = \"block\"; // Show the \"Clear Table\" button again\r\n\r\n      // Display where you are inputting the value again\r\n      displayNextRow(); // Show the current row for input, along with the day and other info\r\n      statusPara.textContent = \"❌ Table clearing canceled.\"; // Optional: status text can also be updated\r\n    });\r\n  });\r\n});\r\n"
+  language: typescript
+template:
+  content: "<h2>Fill Table Column</h2>\r\n\r\n<!-- Date buttons -->\r\n<button id=\"sundayBtn\">Sunday</button>\r\n<button id=\"mondayBtn\">Monday</button>\r\n<button id=\"tuesdayBtn\">Tuesday</button>\r\n<button id=\"wednesdayBtn\">Wednesday</button>\r\n<button id=\"thursdayBtn\">Thursday</button>\r\n<button id=\"fridayBtn\">Friday</button>\r\n<button id=\"saturdayBtn\">Saturday</button>\r\n\r\n<!-- Input and buttons in a new line -->\r\n<div style=\"margin-top: 20px;\">\r\n\t<input type=\"text\" id=\"cellInput\" placeholder=\"Enter value...\" style=\"width: 100%; padding: 10px; font-size: 18px;\" />\r\n\t<button id=\"nextButton\" style=\"width: 100%; padding: 10px; font-size: 18px; margin-top: 10px;\">Next</button>\r\n</div>\r\n\r\n<!-- Back Button -->\r\n<button id=\"backButton\" style=\"width: 100%; padding: 10px; font-size: 18px; margin-top: 10px;\">Back</button>\r\n\r\n<!-- Yes/No confirmation buttons (hidden initially) -->\r\n<div id=\"confirmationButtons\" style=\"display: none;\">\r\n\t<button id=\"yesButton\" style=\"width: 48%; padding: 10px; font-size: 18px;\">Yes</button>\r\n\t<button id=\"noButton\" style=\"width: 48%; padding: 10px; font-size: 18px;\">No</button>\r\n</div>\r\n\r\n<!-- Status Text -->\r\n<p id=\"status\">Status: Waiting...</p>\r\n\r\n<!-- Clear Table Button (placed at the bottom) -->\r\n<button id=\"clearTableButton\" style=\"width: 100%; padding: 10px; font-size: 18px;\">Clear Table</button>\r\n\r\n<script src=\"app.js\"></script>"
+  language: html
+style:
+  content: |
+    /* Overall styling */
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    /* Button container styling */
+    .button-container {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap; /* Allow buttons to wrap onto the next line */
+      margin-bottom: 20px;
+    }
+
+    /* Styling for each button */
+    button {
+      font-size: 16px;
+      padding: 15px 20px;
+      margin: 10px;
+      border: 2px solid #4CAF50;
+      background-color: #4CAF50;
+      color: white;
+      cursor: pointer;
+      border-radius: 8px;
+      flex-grow: 1;  /* Make the buttons grow to fill space */
+      min-width: 120px; /* Ensure buttons don't get too small */
+      max-width: 200px; /* Prevent buttons from becoming too large */
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    /* Input field container */
+    .input-container {
+      margin-top: 20px;
+    }
+
+    /* Styling for input field */
+    #cellInput {
+      font-size: 20px;
+      padding: 15px;
+      width: 100%; /* Make the input field take the full width */
+      max-width: 400px; /* Limit the width */
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 2px solid #4CAF50;
+    }
+
+    /* Styling for the next and back buttons */
+    #nextButton, #backButton {
+      font-size: 20px;
+      padding: 15px 30px;
+      border-radius: 8px;
+      border: 2px solid #4CAF50;
+      background-color: #4CAF50;
+      color: white;
+      margin-top: 10px;
+      cursor: pointer;
+      width: 100%;
+      max-width: 200px; /* Prevent the buttons from getting too large */
+    }
+
+    #nextButton:hover, #backButton:hover {
+      background-color: #45a049;
+    }
+
+    /* Styling for status text */
+    #status {
+      font-size: 20px;
+      margin-top: 20px;
+    }
+
+    /* Clear Table button */
+    #clearTableButton {
+      display: block;
+      margin: 0 auto;
+      font-size: 20px;
+      padding: 15px 30px;
+      border-radius: 8px;
+      border: 2px solid #f44336;
+      background-color: #f44336;
+      color: white;
+      margin-top: 20px;
+      cursor: pointer;
+      width: 100%;
+      max-width: 200px; /* Prevent the buttons from getting too large */
+      
+    }
+
+    #clearTableButton:hover {
+      background-color: #da190b;
+    }
+  language: css
+libraries: |-
+  https://appsforoffice.microsoft.com/lib/1/hosted/office.js
+  https://appsforoffice.microsoft.com/lib/1/hosted/office.d.ts
+
+  https://unpkg.com/office-ui-fabric-core@11.1.0/dist/css/fabric.min.css
+  https://unpkg.com/office-ui-fabric-js@1.5.0/dist/css/fabric.components.min.css
